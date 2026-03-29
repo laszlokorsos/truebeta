@@ -1,14 +1,25 @@
+import concurrent.futures
 import datetime
 import numpy as np
 import yfinance as yf
 import pandas as pd
 from cachetools import TTLCache
 
-# Cache: up to 500 tickers, 12-hour TTL
-_price_cache = TTLCache(maxsize=500, ttl=12 * 3600)
+from core.config import PRICE_CACHE_MAXSIZE, PRICE_CACHE_TTL, MIN_TRADING_DAYS, YFINANCE_TIMEOUT
+
+_price_cache = TTLCache(maxsize=PRICE_CACHE_MAXSIZE, ttl=PRICE_CACHE_TTL)
 
 # ^IRX is the 13-week Treasury Bill rate (annualized, in percentage points)
 RF_TICKER = "^IRX"
+
+
+def _download_with_timeout(tickers_str, start, end, timeout):
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(
+            yf.download, tickers_str, start=start, end=end,
+            auto_adjust=True, progress=False,
+        )
+        return future.result(timeout=timeout)
 
 
 def fetch_prices(ticker, benchmark="^GSPC", years=7):
@@ -26,7 +37,7 @@ def fetch_prices(ticker, benchmark="^GSPC", years=7):
     Raises:
         ValueError: if ticker data cannot be fetched
     """
-    cache_key = (ticker.upper(), benchmark, years, datetime.date.today().isoformat())
+    cache_key = (ticker.upper(), benchmark, years)
     if cache_key in _price_cache:
         return _price_cache[cache_key]
 
@@ -34,8 +45,10 @@ def fetch_prices(ticker, benchmark="^GSPC", years=7):
     start = end - datetime.timedelta(days=int(years * 365.25) + 30)
 
     tickers_str = f"{ticker} {benchmark} {RF_TICKER}"
-    data = yf.download(tickers_str, start=start.isoformat(), end=end.isoformat(),
-                       auto_adjust=True, progress=False)
+    try:
+        data = _download_with_timeout(tickers_str, start.isoformat(), end.isoformat(), YFINANCE_TIMEOUT)
+    except concurrent.futures.TimeoutError:
+        raise ValueError(f"Timeout fetching data for ticker '{ticker}'")
 
     if data.empty:
         raise ValueError(f"No data found for ticker '{ticker}'")
@@ -69,8 +82,8 @@ def fetch_prices(ticker, benchmark="^GSPC", years=7):
 
     prices = prices.dropna(subset=["stock", "market"])
 
-    if len(prices) < 60:
-        raise ValueError(f"Insufficient data for ticker '{ticker}' (need at least 60 trading days)")
+    if len(prices) < MIN_TRADING_DAYS:
+        raise ValueError(f"Insufficient data for ticker '{ticker}' (need at least {MIN_TRADING_DAYS} trading days)")
 
     _price_cache[cache_key] = prices
     return prices

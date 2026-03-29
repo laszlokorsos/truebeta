@@ -1,9 +1,14 @@
+import logging
 import math
+
 import numpy as np
 from fastapi import APIRouter, Request, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
+from core.config import TRADING_DAYS_PER_YEAR, RATE_LIMIT_SEARCH
 from core.data import fetch_prices, compute_returns
 from core.kalman import kalman_beta
 from core.ols import rolling_ols_beta
@@ -11,6 +16,9 @@ from core.charts import beta_chart, price_chart, alpha_chart
 from core.sp500 import get_sp500_tickers
 
 import os
+
+logger = logging.getLogger(__name__)
+limiter = Limiter(key_func=get_remote_address)
 
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -57,8 +65,18 @@ async def stock_detail(
     display_years = range_opt["years"]
     ols_window = window_opt["days"]
 
+    # Clamp OLS window so it doesn't exceed the display range
+    max_ols_days = int(display_years * TRADING_DAYS_PER_YEAR)
+    if ols_window > max_ols_days:
+        valid = [w for w in WINDOW_OPTIONS if w["days"] <= max_ols_days]
+        window_opt = valid[-1] if valid else WINDOW_OPTIONS[0]
+        ols_window = window_opt["days"]
+
+    # Filter window options shown in UI to only those that fit the display range
+    valid_window_options = [w for w in WINDOW_OPTIONS if w["days"] <= max_ols_days]
+
     # Fetch enough data: display range + OLS warm-up + buffer
-    fetch_years = display_years + math.ceil(ols_window / 252) + 1
+    fetch_years = display_years + math.ceil(ols_window / TRADING_DAYS_PER_YEAR) + 1
     try:
         prices = fetch_prices(ticker, years=fetch_years)
     except ValueError as e:
@@ -77,7 +95,7 @@ async def stock_detail(
     # Find the display trim index:
     # We want to show `display_years` of data counting back from today,
     # but never before OLS has its first valid value.
-    display_trading_days = int(display_years * 252)
+    display_trading_days = int(display_years * TRADING_DAYS_PER_YEAR)
     total_days = len(returns)
 
     # Start of display range (counting from end)
@@ -126,7 +144,7 @@ async def stock_detail(
         if match:
             company_name = match["name"]
     except Exception:
-        pass
+        logger.exception("Failed to look up company name for %s", ticker)
 
     return templates.TemplateResponse(request, "ticker.html", {
         "ticker": ticker,
@@ -138,7 +156,7 @@ async def stock_detail(
         "chart_price": chart_price_data,
         "chart_alpha": chart_alpha_data,
         "range_options": RANGE_OPTIONS,
-        "window_options": WINDOW_OPTIONS,
+        "window_options": valid_window_options,
         "selected_range": range_opt["value"],
         "selected_window": window_opt["value"],
         "selected_window_label": window_opt["label"],
@@ -146,12 +164,14 @@ async def stock_detail(
 
 
 @router.get("/api/search")
-async def search_tickers(q: str = Query("", min_length=1)):
+@limiter.limit(RATE_LIMIT_SEARCH)
+async def search_tickers(request: Request, q: str = Query("", min_length=1)):
     """Autocomplete endpoint for ticker search."""
     q = q.upper().strip()
     try:
         sp500 = get_sp500_tickers()
     except Exception:
+        logger.exception("Failed to fetch S&P 500 tickers for search")
         return JSONResponse([])
 
     matches = [

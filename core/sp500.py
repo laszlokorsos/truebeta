@@ -3,7 +3,9 @@ import requests
 import pandas as pd
 from cachetools import TTLCache
 
-_sp500_cache = TTLCache(maxsize=1, ttl=24 * 3600)
+from core.config import SP500_CACHE_TTL
+
+_sp500_cache = TTLCache(maxsize=1, ttl=SP500_CACHE_TTL)
 _CACHE_KEY = "sp500"
 
 _HEADERS = {

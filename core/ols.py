@@ -31,7 +31,10 @@ def rolling_ols_beta(stock_returns, market_returns, window=252):
         x_mean = x.mean()
         y_mean = y.mean()
         x_demean = x - x_mean
-        beta = np.dot(x_demean, y - y_mean) / np.dot(x_demean, x_demean)
+        denom = np.dot(x_demean, x_demean)
+        if denom == 0.0:
+            continue  # betas[t] and alphas[t] remain NaN
+        beta = np.dot(x_demean, y - y_mean) / denom
         alpha = y_mean - beta * x_mean
 
         betas[t] = beta
