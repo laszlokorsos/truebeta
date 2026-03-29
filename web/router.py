@@ -39,7 +39,7 @@ WINDOW_MAP = {w["value"]: w for w in WINDOW_OPTIONS}
 
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
 
 
 @router.get("/stock/{ticker}", response_class=HTMLResponse)
@@ -62,8 +62,7 @@ async def stock_detail(
     try:
         prices = fetch_prices(ticker, years=fetch_years)
     except ValueError as e:
-        return templates.TemplateResponse("404.html", {
-            "request": request,
+        return templates.TemplateResponse(request, "404.html", {
             "message": str(e),
         }, status_code=404)
 
@@ -129,8 +128,7 @@ async def stock_detail(
     except Exception:
         pass
 
-    return templates.TemplateResponse("ticker.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "ticker.html", {
         "ticker": ticker,
         "company_name": company_name,
         "current_kalman_beta": current_kalman_beta,
