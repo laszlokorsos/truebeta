@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+{% block title %}TrueBeta — Dynamic Stock Beta Estimation{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="bg-gradient-to-br from-navy-900 via-slate-900 to-navy-950 text-white pt-20 pb-24">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 text-center">
+        <h1 class="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight mb-6 leading-tight">
+            What is your stock's<br><span class="text-blue-400">true beta</span>?
+        </h1>
+        <p class="text-lg sm:text-xl text-slate-300 mb-10 max-w-2xl mx-auto leading-relaxed">
+            Beta measures a stock's sensitivity to the market — but it's always changing.
+            We use Kalman filtering to estimate dynamic, real-time beta instead of relying on static estimates.
+        </p>
+        <div class="ac-wrap max-w-xl mx-auto">
+            <div class="flex gap-3">
+                <input type="text" data-ac placeholder="Enter a ticker symbol (e.g. AAPL, TSLA, MSFT)"
+                       autocomplete="off"
+                       class="flex-1 px-5 py-4 rounded-xl bg-white text-slate-800 placeholder-slate-400 text-lg focus:outline-none focus:ring-4 focus:ring-blue-400 shadow-lg">
+                <button onclick="var v=this.previousElementSibling.value.trim().toUpperCase(); if(v) location.href='/stock/'+v;"
+                        class="px-7 py-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl shadow-lg transition-colors">
+                    Go
+                </button>
+            </div>
+            <div class="ac-list rounded-b-xl"></div>
+        </div>
+    </div>
+</section>
+
+<!-- What is Beta — wider 2-col + full-width layout -->
+<section class="py-20">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6">
+        <h2 class="text-3xl font-bold text-center mb-4">Understanding Beta</h2>
+        <p class="text-center text-slate-500 mb-14 max-w-2xl mx-auto">
+            Beta is the single most important number in portfolio risk management.
+            Here's why the way you estimate it matters.
+        </p>
+
+        <!-- Card 1: What is Beta — full width -->
+        <div class="bg-white rounded-2xl p-8 sm:p-10 shadow-sm border border-slate-100 mb-8">
+            <div class="flex items-start gap-6">
+                <div class="w-14 h-14 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <span class="text-2xl font-bold text-blue-600">&beta;</span>
+                </div>
+                <div>
+                    <h3 class="text-xl font-semibold mb-2">What is Beta?</h3>
+                    <p class="text-slate-600 leading-relaxed max-w-3xl">
+                        Beta (&beta;) measures how much a stock moves relative to the overall market.
+                        A beta of 1.5 means the stock tends to move 1.5% for every 1% move in the S&P 500.
+                        It's the cornerstone of modern portfolio theory, risk management, and hedging —
+                        used by every institutional investor to size positions and manage exposure.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cards 2 & 3: Problem vs Solution — side by side -->
+        <div class="grid md:grid-cols-2 gap-8">
+            <div class="bg-white rounded-2xl p-8 sm:p-10 shadow-sm border border-slate-100">
+                <div class="w-14 h-14 bg-orange-100 rounded-xl flex items-center justify-center mb-5">
+                    <span class="text-xl font-bold text-orange-600">OLS</span>
+                </div>
+                <h3 class="text-xl font-semibold mb-3">The Problem with Fixed Beta</h3>
+                <p class="text-slate-600 leading-relaxed">
+                    Traditional beta is estimated using a fixed window of historical data — typically 1 year of daily returns
+                    regressed against the market. This assumes beta is constant within that window. But it's not.
+                    Market conditions, business fundamentals, leverage changes, and investor sentiment cause beta
+                    to shift continuously. A single number hides the whole story.
+                </p>
+            </div>
+
+            <div class="bg-white rounded-2xl p-8 sm:p-10 shadow-sm border border-slate-100">
+                <div class="w-14 h-14 bg-green-100 rounded-xl flex items-center justify-center mb-5">
+                    <span class="text-lg font-bold text-green-600">KF</span>
+                </div>
+                <h3 class="text-xl font-semibold mb-3">Dynamic Beta via Kalman Filter</h3>
+                <p class="text-slate-600 leading-relaxed">
+                    The Kalman filter models beta as a continuously evolving state variable rather than a fixed parameter.
+                    At each time step, it optimally combines its prediction (based on yesterday's estimate)
+                    with the new observation (today's returns), producing a smooth, adaptive beta estimate
+                    along with a measure of uncertainty.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Why Kalman Filter is Better -->
+<section class="py-20 bg-white">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6">
+        <h2 class="text-3xl font-bold text-center mb-4">Why Kalman Filtering?</h2>
+        <p class="text-center text-slate-500 mb-14 max-w-2xl mx-auto">
+            The Kalman filter is an optimal recursive estimator used to navigate spacecraft,
+            track missiles, and now — estimate your stock's true market sensitivity.
+        </p>
+
+        <div class="grid md:grid-cols-2 gap-12 md:gap-16">
+            <div>
+                <h3 class="text-lg font-semibold mb-6 text-red-600 uppercase tracking-wide">Rolling OLS Limitations</h3>
+                <ul class="space-y-5 text-slate-600">
+                    <li class="flex items-start gap-4">
+                        <span class="text-red-400 text-lg mt-0.5 flex-shrink-0">&times;</span>
+                        <div>
+                            <strong class="text-slate-800">Arbitrary window choice</strong>
+                            <p class="mt-1 text-sm leading-relaxed">60 days? 252 days? The answer changes the result dramatically, and there's no principled way to choose.</p>
+                        </div>
+                    </li>
+                    <li class="flex items-start gap-4">
+                        <span class="text-red-400 text-lg mt-0.5 flex-shrink-0">&times;</span>
+                        <div>
+                            <strong class="text-slate-800">Lagging</strong>
+                            <p class="mt-1 text-sm leading-relaxed">The rolling window reacts slowly to regime changes. By the time it adjusts, the opportunity is gone.</p>
+                        </div>
+                    </li>
+                    <li class="flex items-start gap-4">
+                        <span class="text-red-400 text-lg mt-0.5 flex-shrink-0">&times;</span>
+                        <div>
+                            <strong class="text-slate-800">Abrupt jumps</strong>
+                            <p class="mt-1 text-sm leading-relaxed">As extreme observations enter or leave the window, beta can jump discontinuously, creating false signals.</p>
+                        </div>
+                    </li>
+                    <li class="flex items-start gap-4">
+                        <span class="text-red-400 text-lg mt-0.5 flex-shrink-0">&times;</span>
+                        <div>
+                            <strong class="text-slate-800">Equal weighting</strong>
+                            <p class="mt-1 text-sm leading-relaxed">All observations in the window get equal weight, whether from yesterday or 11 months ago.</p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold mb-6 text-blue-600 uppercase tracking-wide">Kalman Filter Advantages</h3>
+                <ul class="space-y-5 text-slate-600">
+                    <li class="flex items-start gap-4">
+                        <span class="text-blue-500 text-lg mt-0.5 flex-shrink-0">&check;</span>
+                        <div>
+                            <strong class="text-slate-800">No window to choose</strong>
+                            <p class="mt-1 text-sm leading-relaxed">The filter automatically determines how much to weight new vs. old data based on the signal-to-noise ratio.</p>
+                        </div>
+                    </li>
+                    <li class="flex items-start gap-4">
+                        <span class="text-blue-500 text-lg mt-0.5 flex-shrink-0">&check;</span>
+                        <div>
+                            <strong class="text-slate-800">Adapts in real time</strong>
+                            <p class="mt-1 text-sm leading-relaxed">Beta updates at every observation, so regime changes are captured immediately.</p>
+                        </div>
+                    </li>
+                    <li class="flex items-start gap-4">
+                        <span class="text-blue-500 text-lg mt-0.5 flex-shrink-0">&check;</span>
+                        <div>
+                            <strong class="text-slate-800">Smooth transitions</strong>
+                            <p class="mt-1 text-sm leading-relaxed">The state-space framework produces smooth beta paths without artificial jumps.</p>
+                        </div>
+                    </li>
+                    <li class="flex items-start gap-4">
+                        <span class="text-blue-500 text-lg mt-0.5 flex-shrink-0">&check;</span>
+                        <div>
+                            <strong class="text-slate-800">Uncertainty quantification</strong>
+                            <p class="mt-1 text-sm leading-relaxed">The filter provides confidence intervals around beta, so you know how certain the estimate is.</p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- The Math -->
+<section class="py-20">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6">
+        <h2 class="text-3xl font-bold text-center mb-4">The State-Space Model</h2>
+        <p class="text-center text-slate-500 mb-14 max-w-2xl mx-auto">
+            We model stock returns using the classic market model, but allow beta to evolve over time.
+        </p>
+
+        <div class="bg-white rounded-2xl p-8 sm:p-12 shadow-sm border border-slate-100 max-w-2xl mx-auto">
+            <div class="space-y-8">
+                <div>
+                    <p class="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-4">Observation Equation</p>
+                    <div class="text-center text-lg sm:text-xl mb-3">
+                        $$(r_{i,t} - r_{f,t}) = \alpha_t + \beta_t \cdot (r_{m,t} - r_{f,t}) + \varepsilon_t, \quad \varepsilon_t \sim \mathcal{N}(0, R)$$
+                    </div>
+                    <p class="text-slate-500 text-sm">Excess stock return = alpha + beta $\times$ excess market return + noise</p>
+                </div>
+
+                <hr class="border-slate-100">
+
+                <div>
+                    <p class="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-4">State Equation</p>
+                    <div class="text-center text-lg sm:text-xl mb-3">
+                        $$\beta_t = \beta_{t-1} + w_t, \quad w_t \sim \mathcal{N}(0, Q)$$
+                    </div>
+                    <p class="text-slate-500 text-sm">Beta follows a random walk — it drifts gradually over time</p>
+                </div>
+
+                <hr class="border-slate-100">
+
+                <div>
+                    <p class="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-4">Kalman Update</p>
+                    <div class="space-y-2 text-center text-base sm:text-lg mb-3">
+                        <div>$$K_t = \frac{P_{t|t-1} \, H_t^\top}{H_t \, P_{t|t-1} \, H_t^\top + R}$$</div>
+                        <div>$$\hat{x}_{t|t} = \hat{x}_{t|t-1} + K_t \left( r_{i,t} - H_t \, \hat{x}_{t|t-1} \right)$$</div>
+                    </div>
+                    <p class="text-slate-500 text-sm leading-relaxed">
+                        The Kalman gain $K_t$ balances how much to trust the new observation vs. the model prediction.
+                        When uncertainty is high, the filter leans on the data; when data is noisy, it trusts the model.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CTA -->
+<section class="py-20 bg-gradient-to-r from-blue-600 to-blue-800 text-white">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 text-center">
+        <h2 class="text-3xl font-bold mb-4">Try it yourself</h2>
+        <p class="text-blue-100 mb-8 text-lg">Enter any ticker to see its dynamic beta compared to the traditional rolling estimate.</p>
+        <div class="ac-wrap max-w-md mx-auto">
+            <div class="flex gap-3">
+                <input type="text" data-ac placeholder="Enter ticker..."
+                       autocomplete="off"
+                       class="flex-1 px-5 py-3.5 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-300">
+                <button onclick="var v=this.closest('.ac-wrap').querySelector('input').value.trim().toUpperCase(); if(v) location.href='/stock/'+v;"
+                        class="px-6 py-3.5 bg-white text-blue-700 font-semibold rounded-xl hover:bg-blue-50 transition-colors">
+                    Analyze
+                </button>
+            </div>
+            <div class="ac-list rounded-b-xl"></div>
+        </div>
+    </div>
+</section>
+{% endblock %}

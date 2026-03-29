@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="TrueBeta — Dynamic stock beta estimation using Kalman filtering. See how your stock's market sensitivity changes over time.">
+    <title>{% block title %}TrueBeta — Dynamic Beta Estimation{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-2.35.0.min.js" charset="utf-8"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- KaTeX for LaTeX math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+            onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}]});"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+                    colors: {
+                        navy: { 800: '#1e293b', 900: '#0f172a', 950: '#020617' },
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .ac-wrap { position: relative; }
+        .ac-list {
+            position: absolute; z-index: 50; width: 100%;
+            max-height: 300px; overflow-y: auto;
+            border: 1px solid #e2e8f0; border-top: none;
+            border-radius: 0 0 0.75rem 0.75rem;
+            background: white; box-shadow: 0 12px 28px rgba(0,0,0,0.12);
+            display: none;
+        }
+        .ac-list.open { display: block; }
+        .ac-list .ac-item {
+            padding: 10px 16px; cursor: pointer;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .ac-list .ac-item:last-child { border-bottom: none; }
+        .ac-list .ac-item:hover, .ac-list .ac-item.active {
+            background-color: #eff6ff;
+        }
+        .ac-list .ac-ticker {
+            font-weight: 600; color: #1e293b; min-width: 60px;
+        }
+        .ac-list .ac-name {
+            color: #64748b; font-size: 0.875rem;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
+    <!-- Header -->
+    <nav class="bg-navy-900 text-white shadow-lg sticky top-0 z-40">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-4">
+            <a href="/" class="text-2xl font-bold tracking-tight flex-shrink-0">
+                True<span class="text-blue-400">Beta</span>
+            </a>
+            <div class="ac-wrap w-full max-w-sm hidden sm:block">
+                <input type="text" data-ac placeholder="Search ticker (e.g. AAPL)"
+                       autocomplete="off"
+                       class="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm">
+                <div class="ac-list"></div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main content -->
+    <main class="flex-1">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-navy-950 text-slate-400 py-8 mt-auto">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 text-center text-sm">
+            <p>TrueBeta uses Kalman filtering to estimate time-varying stock betas. Data provided by Yahoo Finance.</p>
+            <p class="mt-2 text-slate-500">For educational and research purposes. Not financial advice.</p>
+        </div>
+    </footer>
+
+    <!-- Shared autocomplete logic for all [data-ac] inputs -->
+    <script>
+    (function() {
+        function initAutocomplete(input) {
+            const wrap = input.closest('.ac-wrap');
+            const list = wrap.querySelector('.ac-list');
+            let debounce, activeIdx = -1;
+
+            function renderItems(data) {
+                list.innerHTML = '';
+                activeIdx = -1;
+                if (!data.length) { list.classList.remove('open'); return; }
+                data.forEach((item, i) => {
+                    const div = document.createElement('div');
+                    div.className = 'ac-item';
+                    div.dataset.idx = i;
+                    div.innerHTML = `<span class="ac-ticker">${item.ticker}</span><span class="ac-name">${item.name}</span>`;
+                    div.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        navigate(item.ticker);
+                    });
+                    list.appendChild(div);
+                });
+                list.classList.add('open');
+            }
+
+            function setActive(idx) {
+                const items = list.querySelectorAll('.ac-item');
+                items.forEach(el => el.classList.remove('active'));
+                activeIdx = idx;
+                if (idx >= 0 && idx < items.length) {
+                    items[idx].classList.add('active');
+                    items[idx].scrollIntoView({ block: 'nearest' });
+                }
+            }
+
+            function navigate(ticker) {
+                window.location.href = '/stock/' + ticker;
+            }
+
+            input.addEventListener('input', function() {
+                clearTimeout(debounce);
+                const q = this.value.trim();
+                if (q.length < 1) { list.classList.remove('open'); return; }
+                debounce = setTimeout(() => {
+                    fetch('/api/search?q=' + encodeURIComponent(q))
+                        .then(r => r.json())
+                        .then(renderItems);
+                }, 150);
+            });
+
+            input.addEventListener('keydown', function(e) {
+                const items = list.querySelectorAll('.ac-item');
+                const isOpen = list.classList.contains('open') && items.length > 0;
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (isOpen) setActive(Math.min(activeIdx + 1, items.length - 1));
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (isOpen) setActive(Math.max(activeIdx - 1, 0));
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (isOpen && activeIdx >= 0) {
+                        const ticker = items[activeIdx].querySelector('.ac-ticker').textContent;
+                        navigate(ticker);
+                    } else {
+                        const q = this.value.trim().toUpperCase();
+                        if (q) navigate(q);
+                    }
+                } else if (e.key === 'Escape') {
+                    list.classList.remove('open');
+                }
+            });
+
+            input.addEventListener('blur', () => {
+                setTimeout(() => list.classList.remove('open'), 150);
+            });
+
+            input.addEventListener('focus', function() {
+                if (list.children.length > 0) list.classList.add('open');
+            });
+        }
+
+        document.querySelectorAll('[data-ac]').forEach(initAutocomplete);
+    })();
+    </script>
+</body>
+</html>
